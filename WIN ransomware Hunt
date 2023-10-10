@@ -1,0 +1,44 @@
+# Credit: https://securityintelligence.com/posts/detections-help-identify-ransomware/
+
+Event ID 7045 is the most important event log entry to detect ransomware operators once they have gained access to a target network.
+Event ID 7045 Detection:
+Detection:
+Lateral Movement / Priv Esc / Execution
+keyword:
+Service File Name contains ADMIN$ OR C$ OR IPC$ OR cmd /c OR powershell OR comspec OR screenconnect OR SystemDrive OR teamviewer OR psexesvc
+
+Event ID 4624 Detection:
+Detection:
+Tunneled RDP
+keyword:
+Logon Type 10 & Source Network Address equals 127.0.0.1 OR ::1
+
+Event ID 4662  Detection:(Domain Controllers Only)
+DCSync
+Object Server = "DS"
+Properties contain "1131f6ad-9c07-11d1-f79f-00c04fc2dcd2" (DS-Replication-Get-Changes-All) and "19195a5b-6da0-11d0-afd3-00c04fd930c9" (Domain-DNS class WRITE_DAC)
+Account name does not end with “$”
+
+Microsoft Print Spooler Service (a.k.a., PrintNightmare) to escalate privileges during ransomware attacks.
+Event ID 808  Detection:(Domain Controllers Only)
+Keyword:
+Message contains .dll AND error code is 0x45A
+
+A logon was attempted using explicit credentials.
+Event ID 4648 Detection:
+AdFind execution
+EID-4848
+Detection
+Process name is AdFind.exe
+
+
+Windows Remote Management (WinRM)
+Event ID 91 
+WinRM Lateral Movement
+Detection
+Message contains "WSMan Shell on server with ResourceUri:%1"
+
+Event ID 4104 
+WinRM Lateral Movement
+Detection
+Message contains "$DoIt = @” OR “[Byte[]]$var_code"
