@@ -255,3 +255,10 @@ EventID: 4624
     - IpAddress:
       - '%domain_controllers%'
       - '%exchange_servers%'
+
+==============================================================================================================================================================================================
+
+title: KrbRelayUp service installation 
+WIndows Event System:  7045
+EventID: 7045 # service installation
+    ServiceName: 'KrbSCM'
