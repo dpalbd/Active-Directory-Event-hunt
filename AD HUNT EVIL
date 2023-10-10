@@ -1,0 +1,257 @@
+#CREDIT : https://github.com/atc-project/atomic-threat-coverage/blob/master/Atomic_Threat_Coverage/Detection_Rules
+#CREDIT :https://github.com/mdecrevoisier/SIGMA-detection-rules/blob/main/windows-active_directory/
+
+Credentials dumping LSASS memory
+description: Detects process access LSASS memory which is typical for credentials dumping tools
+Sysmon EventID: 10
+EXE/ TargetImage:'\lsass.exe'
+Possible ProcessName|endswith: 
+ 
+            - '\wmiprvse.exe'
+            - '\taskmgr.exe'
+            - '\procexp64.exe'
+            - '\procexp.exe'
+            - '\lsm.exe'
+            - '\csrss.exe'
+            - '\wininit.exe'
+            - '\vmtoolsd.exe'
+
+
+description: Files with well-known filenames (parts of credential dump software or files produced by them) creation
+Sysmon EventID: 11
+        TargetFilename|contains or key word: 
+            - '\pwdump'
+            - '\kirbi'
+            - '\pwhashes'
+            - '\wce_ccache'
+            - '\wce_krbtkts'
+            - '\fgdump-log'
+
+        TargetFilename|endswith or keyword: 
+            - '\test.pwd'
+            - '\lsremora64.dll'
+            - '\lsremora.dll'
+            - '\fgexec.exe'
+            - '\wceaux.dll'
+            - '\SAM.out'
+            - '\SECURITY.out'
+            - '\SYSTEM.out'
+            - '\NTDS.out'
+            - '\DumpExt.dll'
+            - '\DumpSvc.exe'
+            - '\cachedump64.exe'
+            - '\cachedump.exe'
+            - '\pstgdump.exe'
+            - '\servpw.exe'
+            - '\servpw64.exe'
+            - '\pwdump.exe'
+            - '\procdump64.exe'
+
+description: Detects well-known credential dumping tools execution via specific named pipes
+Sysmon  EventID: 17
+        PipeName|contains or keyword:
+            - '\lsadump'
+            - '\cachedump'
+            - '\wceservicepipe'
+==============================================================================================================================================================================================
+LSASS memory dump Detection 
+description: Detects process LSASS memory dump using procdump or taskmgr based on the CallTrace pointing to dbghelp.dll or dbgcore.dll for win10
+Sysmon EventID: 10
+EXE/Process: 'C:\windows\system32\lsass.exe'
+GrantedAccess: '0x1fffff'
+ CallTrace:
+         - '*dbghelp.dll*'
+         - '*dbgcore.dll*'
+==============================================================================================================================================================================================       
+
+Pass The Hash 
+description: Detects successful logon with logon type 9 (NewCredentials) which matches the Overpass the Hash behavior of e.g Mimikatz's sekurlsa::pth module.
+WINDOWS Event ID (Security Service): 4624
+With following Keyword
+        EventID: 4624
+        LogonType: 9
+        LogonProcessName: seclogo
+        AuthenticationPackageName: Negotiate
+
+definition: The successful use of PtH for lateral movement between workstations would trigger event ID 4624, a failed logon attempt would trigger an event ID 4625
+detection:
+ WINDOWS Event ID (Security Service): 4624
+With following Keyword
+        - EventID: 4624
+          LogonType: '3'
+          LogonProcessName: 'NtLmSsp'
+          WorkstationName: '%Workstations%'
+          ComputerName: '%Workstations%'
+        - EventID: 4625
+          LogonType: '3'
+          LogonProcessName: 'NtLmSsp'
+          WorkstationName: '%Workstations%'
+          ComputerName: '%Workstations%'
+    filter:
+        AccountName: 'ANONYMOUS LOGON'
+
+
+definition: The successful use of PtH for lateral movement between workstations would trigger event ID 4624 
+WINDOWS Event ID (Security Service): 4624
+With following Keyword
+ - EventID: 4624
+          SubjectUserSid: 'S-1-0-0'
+          LogonType: '3'
+          LogonProcessName: 'NtLmSsp'
+          KeyLength: '0'
+        - EventID: 4624
+          LogonType: '9'
+          LogonProcessName: 'seclogo'
+    filter:
+        AccountName: 'ANONYMOUS LOGON'
+==============================================================================================================================================================================================
+Mimikatz DC Sync
+description: Detects Mimikatz DC sync security events
+WINDOWS Event ID (Security Service): 4662
+Keyword
+        EventID: 4662
+        Properties: 
+            - '*Replicating Directory Changes All*'
+            - '*1131f6ad-9c07-11d1-f79f-00c04fc2dcd2*'
+    filter1:
+        SubjectDomainName: 'Window Manager'
+    filter2: 
+        SubjectUserName:
+            - 'NT AUTHORITY*'
+            - '*$'
+
+
+
+WINDOWS Event ID (Security Service): 5136
+keyword:
+    EventID: 5136
+    AttributeLDAPDisplayName: ntSecurityDescriptor
+    OperationType: '%%14674'  # value added  
+    AttributeValue|contains:
+      - 1131f6aa-9c07-11d1-f79f-00c04fc2dcd2 # DS-Replication-Get-Changes
+      - 1131f6ad-9c07-11d1-f79f-00c04fc2dcd2 # DS-Replication-Get-Changes-All
+      - 89e95b76-444d-4c62-991a-0facbeda640c # DS-Replication-Get-Changes-In-Filtered-Set
+  filter:
+    SubjectUserName|endswith: $
+
+
+
+==============================================================================================================================================================================================
+
+ Brutforce enumeration with unexisting users (Kerberos)
+WINDOWS Event ID (Security Service): 4771,4768
+Keyword:
+    EventID:
+      - 4771
+      - 4768
+    Status: '0x6' # KDC_ERR_C_PRINCIPAL_UNKNOWN
+  filter:
+    - IpAddress: '%domain_controllers_ips%' # reduce amount of false positives
+    - TicketOptions: 0x50800000             # covered by Kerbrute rule
+  condition: selection and not filter | count(TargetUserName) by Computer > 20 #
+
+
+title: Kerberos AS-REP Roasting ticket request detected
+WINDOWS Event ID (Security Service): 4768
+Keyword: 
+    EventID: 4768
+    Status: 0x0 # Success
+    ServiceSid|endswith: '-502'
+    PreAuthType: 0  # Logon without Pre-Authentication.
+    #TicketOptions:
+    #  - 0x40800010 # triggered by ASREPRoast & Rubeus
+    #  - 0x50800000 # user enumeration triggered by Kerbrute (proxiable ticket)
+  filter:
+    - IpAddress: '%domain_controllers_ips%' # reduce amount of false positives
+
+
+title: Rubeus Kerberos constrained delegation abuse (S4U2Proxy)
+WINDOWS Event ID (Security Service):4769
+Keyword:
+    EventID: 4769
+    TransmittedServices|contains: '@'
+  filter:
+    - ServiceSid|endswith: '-502' # Krbtgt account SID is excluded as it may be related to "Unconstrained Domain Persistence" (see other rule)
+    - TargetUserName: '%allowed_S4U2Proxy_accounts%' # User accounts allowed to perform constrained delegation
+    - IpAddress: '%domain_controllers_ips%'          # reduce amount of false positives
+
+title: Host constrained delegation settings changed for potential abuse (Rubeus) - Any protocol
+WINDOWS Event ID (Security Service):4742
+Keyword:
+EventID: 4742
+    UserAccountControl: '%%2098' # Enable option "Approved for authenticated delegation"
+  filter:
+    AllowedToDelegateTo: '-' # Can be: "cifs/srv01 cifs/srv02.demo.lan dcom/dc03..
+
+title: Host unconstrained delegation settings changed for potential abuse (Rubeus)
+WINDOWS Event ID (Security Service):4742
+keyword:
+  EventID: 4742
+    UserAccountControl: '%%2093' # Enable option "Trust this computer for delegation to any service (Kerberos only)"
+
+title: SharpHound host enumeration over Kerberos
+WINDOWS Event ID (Security Service): 4769
+keyword:
+ EventID: 4769
+    ServiceName|endswith: '$'
+    Status: 0x0
+  filter:
+    - IpAddress:
+      - '::1'
+      - '%domain_controllers_ip%'
+    - TargetUserName|contains: "$@" # excludes computer accounts
+  condition: selection and not filter | count(ServiceName) by IpAddress > 20
+
+title: Computer account manipulation for delegation (RBCD)
+WINDOWS Event ID (Security Service): 5136
+keyword:
+ EventID: 5136
+    DSType: '%%14676' # value added 
+    ObjectClass: computer 
+    AttributeLDAPDisplayName: 'msDS-AllowedToActOnBehalfOfOtherIdentity'
+
+title: Account set with Kerberos pre-authentication not required (AS-REP Roasting)
+ EventID: 4738
+    UserAccountControl: '%%2096' # Do not require Kerberos preauthentication - TRUE
+
+
+==============================================================================================================================================================================================
+
+title: Potential SAM database user credentials dumped with DCshadow
+WINDOWS Event ID (Security Service):4661
+Keyword:
+EventID: 4661
+ SubjectUserSid: S-1-5-18
+    ProcessName|endswith: '\lsass.exe'
+    ObjectServer: Security Account Manager
+    ObjectType:
+      - SAM_SERVER
+      - SAM_DOMAIN
+    ObjectName|startswith:
+      - CN=
+      - DC=
+    AccessList|contains|all:
+      - '%%5392' # ReadPasswordParameters
+      - '%%5447' # SetPassword
+
+
+title: NetSYnc attack
+correlation: ID 5145 SubjectLogonId 0x1f4a6c852 AND ID 4624 TargetLogonId 0x1f4a6c852
+EventID: 4624
+    Computer: '%domain_controllers%'
+    TargetUserSid: S-1-5-21-
+    LogonType: 3
+    AuthenticationPackageName: Kerberos
+
+  selection_share:
+    EventID: 5145
+    Computer: '%domain_controllers%'
+    ShareName: \\*\IPC$
+    RelativeTargetName: NETLOGON
+
+  filter:
+    - SubjectUserName|endswith: $
+    - SubjectUserSid: S-1-5-7 #  ANONYMOUS LOGON
+    - IpAddress:
+      - '%domain_controllers%'
+      - '%exchange_servers%'
