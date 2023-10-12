@@ -14,3 +14,114 @@ Event Id 4624 with logon types ( 10 ,2 ) , Type 2 ( A user logged on to this com
 Event Id 4624 with more than 1 successful logon with logon type in 3, 10 from same account name and different source network address.
 
 Event ID 4624 and logon types ( 2,10,7 ) and account name like svc_* or internal service accounts , Possible interactive logon from a service account.
+
+==================================================================================================================================================================
+#credit:https://www.patrick-bareiss.com/detecting-local-user-creation-in-ad-with-sigma/
+
+title: Detects local user creation
+
+By monitoring the Event Log 4720 on non domain controller, we are able to detect local user creation on windows servers:
+logsource:
+    product: windows
+    service: security
+detection:
+    selection:
+        EventID: 4720
+    condition: selection
+fields:
+    - EventCode
+    - Account_Name
+    - Account_Domain
+falsepositives:
+    - Domain Controller Logs
+
+
+
+#credit: https://github.com/SigmaHQ/sigma/blob/master/rules/windows/process_creation/proc_creation_win_net_user_add.yml
+title: New User Created Via Net.EXE
+
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection_img:
+        - Image|endswith:
+            - '\net.exe'
+            - '\net1.exe'
+        - OriginalFileName:
+            - 'net.exe'
+            - 'net1.exe'
+    selection_cli:
+        CommandLine|contains|all:
+            - 'user'
+            - 'add'
+    condition: all of selection_*
+fields:
+    - ComputerName
+    - User
+    - CommandLine
+falsepositives:
+    - Legitimate user creation.
+
+
+title: Detects local user creation
+logsource:
+    product: windows
+    service: security
+detection:
+    selection:
+        EventID: 4720
+    condition: selection
+fields:
+    - EventCode
+    - AccountName
+    - AccountDomain
+============================================================================================================================
+
+title: Eventlog Cleared
+logsource:
+    product: windows
+    service: system
+detection:
+    selection:
+        EventID: 104
+        Source: Microsoft-Windows-Eventlog
+    condition: selection
+falsepositives:
+    - Unknown
+
+title: Security Eventlog Cleared
+logsource:
+    product: windows
+    service: security
+detection:
+    selection:
+        EventID:
+            - 517
+            - 1102
+    condition: selectio
+============================================================================================================================
+
+
+title: Netsh Firewall Rule Added 
+
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine:
+            - '*netsh* firewall add*'
+            - '*netsh* advfirewall* add*'
+
+title: Netsh Firewall Rule Added 
+logsource:
+    product: windows
+    service: sysmon
+detection:
+    selection:
+        CommandLine:
+            - '*netsh* firewall add*'
+            - '*netsh* advfirewall* add*'
+
+
