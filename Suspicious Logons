@@ -1,0 +1,16 @@
+#credit:https://www.socinvestigation.com/threat-hunting-with-windows-event-ids-4625-4624/
+Suspicious Successful Logons:
+
+
+Event ID 4624 with Logon type 10 ( RemoteInteractive logins ) and source network address is loopback ( 127.*.*.* or ::1 ) , mostly RDP tunneling.
+
+
+Event ID 4624 and logon type 10 ( Remote Interactive ) and source network is not in your organization Subnet.
+
+Event ID 4624 and logon type ( 3, 10 ) and both source work station names and destination are end user machines.
+
+Event Id 4624 with logon types ( 10 ,2 ) , Type 2 ( A user logged on to this computer ) and account name has ends with $ , Example: ItSupport$ , Possible fake machine account.
+
+Event Id 4624 with more than 1 successful logon with logon type in 3, 10 from same account name and different source network address.
+
+Event ID 4624 and logon types ( 2,10,7 ) and account name like svc_* or internal service accounts , Possible interactive logon from a service account.
