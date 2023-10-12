@@ -1,5 +1,6 @@
 #CREDIT : https://github.com/atc-project/atomic-threat-coverage/blob/master/Atomic_Threat_Coverage/Detection_Rules
 #CREDIT :https://github.com/mdecrevoisier/SIGMA-detection-rules/blob/main/windows-active_directory/
+#
 
 Credentials dumping LSASS memory
 description: Detects process access LSASS memory which is typical for credentials dumping tools
@@ -282,9 +283,76 @@ falsepositives:
 - new domain controller registration
 
 ==============================================================================================================================================================================================
+title: Replication privileges granted to perform DCSync attack
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 5136
+    AttributeLDAPDisplayName: ntSecurityDescriptor
+    OperationType: '%%14674'  # value added  
+    AttributeValue|contains:
+      - 1131f6aa-9c07-11d1-f79f-00c04fc2dcd2 # DS-Replication-Get-Changes
+      - 1131f6ad-9c07-11d1-f79f-00c04fc2dcd2 # DS-Replication-Get-Changes-All
+      - 89e95b76-444d-4c62-991a-0facbeda640c # DS-Replication-Get-Changes-In-Filtered-Set
+  filter:
+    SubjectUserName|endswith: $
+  condition: selection and not filter
 
+title: Account renamed to admin (or likely) account to evade defense
+logsource:
+  product: windows
+  service: security
+detection:
+  selection_event:
+    EventID: 4781 # Account name change
 
+  selection_pattern:
+    - NewTargetUserName|startswith:
+      - admin-
+      - adm-
+      - <customer pattern>
+    - NewTargetUserName|endswith:
+      - -admin
+      - -adm
+      - <customer pattern>
+  filter:
+    - OldTargetUserName|startswith: # Original target account name should not be already an admin account
+      - admin-
+      - adm-
+      - <customer pattern>
+    - OldTargetUserName|endswith:
+      - -admin
+      - -adm
+      - <customer pattern>
+    - TargetSid|endswith: '-500' # Exclude default builtin account
+  condition: selection_event and selection_pattern and not filter
+falsepositives:
+- builtin admin account renamed for obfuscation
 
+==============================================================================================================================================================================================
+Kerberos 
+title: Account set with Kerberos DES encryption activated (weakness introduction)
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4738
+    UserAccountControl: '%%2095' # Use only Kerberos DES encryption types - TRUE
+  condition: selection
 
-
+title: Account set with Kerberos pre-authentication not required (AS-REP Roasting)
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4738
+    UserAccountControl: '%%2096' # Do not require Kerberos preauthentication - TRUE
+  condition: selection
+falsepositives:
+- None
+==============================================================================================================================================================================================
 
