@@ -421,3 +421,35 @@ falsepositives:
 level: critical
 
 
+
+
+title: RDP reconnaissance with valid credentials performed on multiple hosts
+description: Detects scenarios where an attacker attempts to brutforce RDP services with compromised credentials via tools like Hydra. Note that this event will be reported only with valid user and password credentials, and it may be reported only when RDP session is fully opened (so not during reconnaisance phase) if NLA is disabled.
+correlation: for further correlation, ID 4624/4625 (logon type 3, 7 or 10) should be used.
+tags:
+- attack.initial_access
+- attack.t1078 # valid account
+- attack.lateral_movement
+- attack.t1021.001 # remote services: RDP
+author: mdecrevoisier
+status: experimental
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 1149 # 'User authentication succeeded': DOES NOT indicate a successful user authentication !!!
+    Channel: Microsoft-Windows-TerminalServices-RemoteConnectionManager/Operational
+  filter:
+    IpAddress: # In ID 1149, IP address is provided in "EventXML.Param3"
+      - '%vulnerability_scanners%'
+      - '%admin_jump_hosts%'
+      - '127.0.0.1'
+      - '::1'
+
+  condition: selection and not filter | count(Computer) by IpAddress > 20 # Count of many computer are reporting connection attemps from a single source IP
+  timeframe: 5m
+falsepositives:
+- VAS scanners, administrator jump host
+level: high
+
