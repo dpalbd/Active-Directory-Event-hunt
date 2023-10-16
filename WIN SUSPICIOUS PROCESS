@@ -1,0 +1,131 @@
+#Credit:https://github.com/SigmaHQ/sigma
+#https://github.com/mdecrevoisier/SIGMA-detection-rules/
+
+
+title: Service creation (command)
+tags:
+- attack.persistence
+- attack.t1543.003
+author: mdecrevoisier
+status: experimental
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection:
+    NewProcessName|endswith: \sc.exe
+    CommandLine|contains: create #  CommandLine "sc \\fs02\ create hacker-testl binPath='virus.exe'
+  condition: selection
+falsepositives:
+- administrator deplying service
+- new application installation
+
+
+title: Service creation (PowerShell)
+tags:
+- attack.persistence
+- attack.t1543.003
+author: mdecrevoisier
+status: experimental
+logsource:
+  product: windows
+  category:
+    - ps_module
+    - ps_classic_script
+    - ps_script
+detection:
+  selection1_powershell_native:
+    EventID: 800
+    EventData|contains|all:
+      - New-Service
+      - Name
+
+  selection2_powershell_modern:
+    EventID: 4103
+    Payload|contains|all:
+      - New-Service
+      - Name
+
+  selection3_powershell_block:
+    EventID: 4104
+    ScriptBlockText|contains|all:
+      - New-Service
+      - Name
+
+  condition: 1 of selection*
+falsepositives:
+- administrator deplying service
+- new application installation
+
+
+title: Service abuse with malicious ImagePath (Reg via command)
+description: Detects scenarios where an attacker modify the original service executable path with a malicious one.
+tags:
+- attack.persistence
+- attack.t1574.010
+author: mdecrevoisier
+status: experimental
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection:
+    EventID: 4688
+    NewProcessName|endswith: \reg.exe
+    CommandLine|contains|all: # Full command: reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\xboxgip" /v ImagePath /t REG_SZ /d "C:\tmp\pentestlab.exe"
+      - REG ADD
+      - '\SYSTEM\CurrentControlSet\Services\'
+      - ImagePath
+  condition: selection
+falsepositives:
+- administrator reconfiguring service
+
+
+title: Service abuse with malicious ImagePath (service)
+tags:
+- attack.persistence
+- attack.t1543.003
+author: mdecrevoisier
+status: experimental
+logsource:
+  product: windows
+  category: process_creation
+detection: # sc config <service_name> binPath="C:\windows\system32\pentestlab.exe"
+  selection_process:
+    NewProcessName|endswith: \sc.exe
+    CommandLine|contains|all:
+      - sc
+      - config
+      - binpath
+  condition: selection
+falsepositives:
+- administrator reconfiguring service
+
+title: Mimikatz Pass-the-hash login
+description: Detects scenarios where an attacker uses the Mimikatz Pass-the-hash feature to move laterally. Correlation with others event IDs can be done in the following way:| ID 4624 TargetLogonId + ID 4672 SubjectLogonId + ID 4688 TargetLogonId. Having those 3 elements together allows to bring in light what was exactly done.
+
+tags:
+- attack.lateral_movement
+- attack.t1550.002
+author: mdecrevoisier
+status: experimental
+logsource:
+  product: windows
+  service: security
+detection: # command: 'privilege::debug' + 'sekurlsa::pth /user:<user> /domain:<domain> /ntlm:<hash> /run:<command>'
+  selection:
+    EventID: 4624
+    LogonType: 9 # New credentials
+    LogonProcessName: seclogo
+    AuthenticationPackageName: Negotiate
+    ProcessName: 'C:\Windows\System32\svchost.exe'
+    IpAddress: '::1'
+  #filter: # if 'token::elevate' command is used, both Subject and Target will be related to SYSTEM account. Therefore the filter needs to be removed.
+    #SubjectUserName|endswith: '$'
+    #TargetUserName|endswith: '$'
+  condition: selection and not filter
+falsepositives:
+- None
+level: high
+
+
