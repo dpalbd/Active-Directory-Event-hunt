@@ -1,0 +1,58 @@
+#credit: https://frsecure.com/blog/windows-forensics-execution/
+
+Link Files
+Windows uses the folder C:\Users\%USERNAME%\AppData\Roaming\Microsoft\Windows\Recent to store LNK files associated with files a user has recently accessed, typically by 
+double-clicking on it in a Windows Explorer window.
+
+If the file is reopened, it will be overwritten with the latest file access regardless of whether the file exists in a different directory.
+For check LNK files
+C:\Users\%USERNAME%\AppData\Roaming\Microsoft\Windows\Recent
+
+Jump Lists
+Jump Lists are files that are generated on a per-user basis for two purposes. AutomaticDestinations are auto-populated when an application associated with a file is run and
+stored in a subfolder within the Recent folder.
+When viewing either of these folders, the files associated with each application are designated with a postfix of “-ms” and an AppID. 
+The AppID meaning requires  web searching.
+Jump Lists files themselves contain valuable information, including the last time the associated application was run and what files/LNKs were opened.
+
+Prefetch and Superfetch
+
+To improve application loading speed, Windows introduced Prefetch in Windows XP. Prefetch essentially grabs all of the files associated with an application from disk and 
+writes them to memory so the user doesn’t have to wait for them to be loaded from disk.
+The Prefetch folder (C:\Windows\Prefetch) that allows these actions to take place contains files where each application is tracked in a correspondingly named.PF file and 
+a hash of the executable.
+In modern Windows systems, each file contains a path to the executable, the most recent and previous seven times the executable was run, and files/directories used by the executable.
+
+It should also be noted that Prefetch is not always enabled, particularly when the system is running on SSDs rather than spinning disk. 
+This can be checked by examining the HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters registry key. 
+If subkeys EnablePrefetcher and EnableSuperfetch show a value of 0, the function is not enabled.
+
+System Resource Usage Monitor (SRUM)
+Task Manager is just a small subset of data stored in the System Resource Monitor(SRUM) database, introduced in Windows 8 for tracking resource use. 
+The full database is located at C:\Windows\system32\sru\SRUDB.dat.
+While running, Windows temporarily stores this data in the HKLM\SOFTWARE\Microsoft\Windows NT\CurrenVersion\SRUM\Extensions and writes to SRUDB.dat at shutdown.
+SRUM contains a wealth of information about user activity including the full path to executables, CPU time in the foreground and background, and the SID responsible for execution.
+
+Registry Hives
+The Windows Registry is a collection of hierarchical databases that contains information, settings, options, and other values leveraged by the Windows operating system and applications that make use of it. There’s a ton of information to help provide evidence of execution if one knows where to look for it.
+
+HKCU\<User SID>\Software\Microsoft\Windows\CurrentVersion\
+Explorer\
+RecentDocs – Stores several keys that can be used to determine what files were accessed by an account. The MRUListEx key shows the order in which files were accessed.
+TypedPaths – Shows items typed into the Windows Explorer bar by the user.
+UserAssist – ROT-13 encoded names of GUI programs that have been run and the number of times each has run.
+
+HKCU\SOFTWARE\Microsoft\Windows\Shell – Often referred to as Shellbags, this registry location (NTUSER.DAT) and the following one (UsrClass.dat) record whenever a user accesses 
+a folder or zip file. 
+
+HKCU\SOFTWARE\Classes – Stored at C:\Users\<Username>\AppData\Local\Microsoft\Windows\UsrClass.dat. This Registry Hive was added in Windows 7 to segment a section of the Registry for
+lower permission processes that can’t (and shouldn’t) write to more restrictive hives.
+
+HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\
+Run\ – This location is used to execute programs at user logon and is a favorite for attackers who are looking to retain persistence on a system. 
+
+RunOnce\ – Similar to “Run”, RunOnce is used to execute an application on the next login and is purged afterward. Also a favorite of bad actors to retain persistence, 
+but also used legitimately for things like software installations or updates that require clean up processes after forcing a reboot.
+
+dam\UserSettings – dam is the Desktop Activity Monitor) and stores similar information to bam.
+HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SRUM\Extensions – See the section on System Resource Usage Monitor (SRUM)for details.
